@@ -178,6 +178,7 @@ typedef struct {
 	struct wl_list link;
 } Seat;
 
+static char *tag_labels[32];  /* Assuming max 32 tags */
 static int sock_fd;
 static char socketdir[256];
 static char *socketpath;
@@ -361,6 +362,30 @@ draw_text(char *text,
 	return nx;
 }
 
+static void
+update_tag_label(Bar *bar, uint32_t tag_idx, const char *window_title)
+{
+    if (tag_labels[tag_idx])
+        free(tag_labels[tag_idx]);
+        
+    char buf[128];
+    if (window_title && (bar->ctags & (1 << tag_idx))) {
+        if (lcaselbl) {
+            char lower_title[64] = {0};
+            strncpy(lower_title, window_title, sizeof(lower_title)-1);
+            for (char *p = lower_title; *p; p++)
+                *p = tolower(*p);
+            snprintf(buf, sizeof(buf), ptagf, tags[tag_idx], lower_title);
+        } else {
+            snprintf(buf, sizeof(buf), ptagf, tags[tag_idx], window_title);
+        }
+    } else {
+        snprintf(buf, sizeof(buf), etagf, tags[tag_idx]);
+    }
+    
+    tag_labels[tag_idx] = strdup(buf);
+}
+
 #define TEXT_WIDTH(text, maxwidth, padding)				\
 	draw_text(text, 0, 0, NULL, NULL, NULL, NULL, maxwidth, 0, padding, NULL, 0)
 
@@ -394,8 +419,6 @@ draw_frame(Bar *bar)
 	/* Draw on images */
 	uint32_t x = 0;
 	uint32_t y = (bar->height + font->ascent - font->descent) / 2;
-	uint32_t boxs = font->height / 9;
-	uint32_t boxw = font->height / 6 + 2;
 
 	for (uint32_t i = 0; i < tags_l; i++) {
 		const bool active = bar->mtags & 1 << i;
@@ -405,28 +428,37 @@ draw_frame(Bar *bar)
 		if (hide_vacant && !active && !occupied && !urgent)
 			continue;
 
-		pixman_color_t *fg_color = urgent ? &urgent_fg_color : (active ? &active_fg_color : (occupied ? &occupied_fg_color : &inactive_fg_color));
-		pixman_color_t *bg_color = urgent ? &urgent_bg_color : (active ? &active_bg_color : (occupied ? &occupied_bg_color : &inactive_bg_color));
+		/* Update the tag label with program name if it's the selected tag */
+		if (active && bar->window_title)
+			update_tag_label(bar, i, bar->window_title);
+		else if (!tag_labels[i])
+			update_tag_label(bar, i, NULL);
+
+		pixman_color_t *fg_color = urgent ? &urgent_fg_color : 
+			(active ? &active_fg_color : 
+			 (occupied ? &occupied_fg_color : &inactive_fg_color));
+		pixman_color_t *bg_color = urgent ? &urgent_bg_color :
+			(active ? &active_bg_color :
+			 (occupied ? &occupied_bg_color : &inactive_bg_color));
+
+		/* Get width before drawing for underline */
+		uint32_t w = TEXT_WIDTH(tag_labels[i], bar->width - x, bar->textpadding);
 		
-		if (!hide_vacant && occupied) {
+		/* Draw the tag text */
+		x = draw_text(tag_labels[i], x, y, foreground, background,
+			     fg_color, bg_color, bar->width, bar->height,
+			     bar->textpadding, NULL, 0);
+
+		/* Draw underline for active or occupied tags */
+		if (active || occupied) {
 			pixman_image_fill_boxes(PIXMAN_OP_SRC, foreground,
-						fg_color, 1, &(pixman_box32_t){
-							.x1 = x + boxs, .x2 = x + boxs + boxw,
-							.y1 = boxs, .y2 = boxs + boxw
-						});
-			if ((!bar->sel || !active) && boxw >= 3) {
-				/* Make box hollow */
-				pixman_image_fill_boxes(PIXMAN_OP_SRC, foreground,
-							&(pixman_color_t){ 0 },
-							1, &(pixman_box32_t){
-								.x1 = x + boxs + 1, .x2 = x + boxs + boxw - 1,
-								.y1 = boxs + 1, .y2 = boxs + boxw - 1
-							});
-			}
+					      fg_color, 1, &(pixman_box32_t){
+						      .x1 = x - w + ulinepad,
+						      .x2 = x - ulinepad,
+						      .y1 = bar->height - ulinestroke - ulinevoffset,
+						      .y2 = bar->height - ulinevoffset
+					      });
 		}
-		
-		x = draw_text(tags[i], x, y, foreground, background, fg_color, bg_color,
-			      bar->width, bar->height, bar->textpadding, NULL, 0);
 	}
 	
 	x = draw_text(bar->layout, x, y, foreground, background,
@@ -526,6 +558,10 @@ cleanup(void)
 {
 	if (socketpath)
 		unlink(socketpath);
+	for (uint32_t i = 0; i < tags_l; i++) {
+        if (tag_labels[i])
+            free(tag_labels[i]);
+	}
 }
 
 static void

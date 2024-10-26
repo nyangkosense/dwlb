@@ -4,6 +4,10 @@
 	  .blue  = ((hex >> 8) & 0xff) * 257,	\
 	  .alpha = (hex & 0xff) * 257 }
 
+// patch for underline 
+static const unsigned int ulinepad      = 2;    /* horizontal padding between the underline and tag */
+static const unsigned int ulinestroke   = 2;    /* thickness / height of the underline */
+static const unsigned int ulinevoffset  = 2;    /* how far above the bottom of the bar the line should appear */
 // use ipc functionality
 static bool ipc = false;
 // initially hide all bars
@@ -28,6 +32,9 @@ static uint32_t buffer_scale = 1;
 static char *fontstr = "monospace:size=16";
 // tag names
 static char *tags_names[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+// draw tag name
+static const char ptagf[] = "%s %s";  /* format of a tag label */
+static const char etagf[] = "%s";     /* format of an empty tag */
 
 // set 16-bit colors for bar
 // use either pixman_color_t struct or HEX_COLOR macro for 8-bit colors

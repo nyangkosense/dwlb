@@ -1,0 +1,119 @@
+diff --git a/dwlb.c b/dwlb.c
+index 21b3411..149ece3 100644
+--- a/dwlb.c
++++ b/dwlb.c
+@@ -178,6 +178,7 @@ typedef struct {
+ 	struct wl_list link;
+ } Seat;
+ 
++static char *tag_labels[32];  /* Assuming max 32 tags */
+ static int sock_fd;
+ static char socketdir[256];
+ static char *socketpath;
+@@ -361,6 +362,30 @@ draw_text(char *text,
+ 	return nx;
+ }
+ 
++static void
++update_tag_label(Bar *bar, uint32_t tag_idx, const char *window_title)
++{
++    if (tag_labels[tag_idx])
++        free(tag_labels[tag_idx]);
++        
++    char buf[128];
++    if (window_title && (bar->ctags & (1 << tag_idx))) {
++        if (lcaselbl) {
++            char lower_title[64] = {0};
++            strncpy(lower_title, window_title, sizeof(lower_title)-1);
++            for (char *p = lower_title; *p; p++)
++                *p = tolower(*p);
++            snprintf(buf, sizeof(buf), ptagf, tags[tag_idx], lower_title);
++        } else {
++            snprintf(buf, sizeof(buf), ptagf, tags[tag_idx], window_title);
++        }
++    } else {
++        snprintf(buf, sizeof(buf), etagf, tags[tag_idx]);
++    }
++    
++    tag_labels[tag_idx] = strdup(buf);
++}
++
+ #define TEXT_WIDTH(text, maxwidth, padding)				\
+ 	draw_text(text, 0, 0, NULL, NULL, NULL, NULL, maxwidth, 0, padding, NULL, 0)
+ 
+@@ -397,17 +422,26 @@ draw_frame(Bar *bar)
+ 	uint32_t boxs = font->height / 9;
+ 	uint32_t boxw = font->height / 6 + 2;
+ 
+-	for (uint32_t i = 0; i < tags_l; i++) {
+-		const bool active = bar->mtags & 1 << i;
+-		const bool occupied = bar->ctags & 1 << i;
+-		const bool urgent = bar->urg & 1 << i;
+-		
+-		if (hide_vacant && !active && !occupied && !urgent)
+-			continue;
+-
+-		pixman_color_t *fg_color = urgent ? &urgent_fg_color : (active ? &active_fg_color : (occupied ? &occupied_fg_color : &inactive_fg_color));
+-		pixman_color_t *bg_color = urgent ? &urgent_bg_color : (active ? &active_bg_color : (occupied ? &occupied_bg_color : &inactive_bg_color));
+-		
++    for (uint32_t i = 0; i < tags_l; i++) {
++        const bool active = bar->mtags & 1 << i;
++        const bool occupied = bar->ctags & 1 << i;
++        const bool urgent = bar->urg & 1 << i;
++        
++        if (hide_vacant && !active && !occupied && !urgent)
++            continue;
++
++		if (active && bar->window_title)
++            update_tag_label(bar, i, bar->window_title);
++        else if (!tag_labels[i])
++            update_tag_label(bar, i, NULL);
++
++        pixman_color_t *fg_color = urgent ? &urgent_fg_color : 
++            (active ? &active_fg_color : 
++             (occupied ? &occupied_fg_color : &inactive_fg_color));
++        pixman_color_t *bg_color = urgent ? &urgent_bg_color :
++            (active ? &active_bg_color :
++             (occupied ? &occupied_bg_color : &inactive_bg_color));
++    
+ 		if (!hide_vacant && occupied) {
+ 			pixman_image_fill_boxes(PIXMAN_OP_SRC, foreground,
+ 						fg_color, 1, &(pixman_box32_t){
+@@ -425,13 +459,14 @@ draw_frame(Bar *bar)
+ 			}
+ 		}
+ 		
+-		x = draw_text(tags[i], x, y, foreground, background, fg_color, bg_color,
+-			      bar->width, bar->height, bar->textpadding, NULL, 0);
++        x = draw_text(tag_labels[i], x, y, foreground, background,
++                     fg_color, bg_color, bar->width, bar->height,
++                     bar->textpadding, NULL, 0);
+ 	}
+ 	
+ 	x = draw_text(bar->layout, x, y, foreground, background,
+-		      &inactive_fg_color, &inactive_bg_color, bar->width,
+-		      bar->height, bar->textpadding, NULL, 0);
++			&inactive_fg_color, &inactive_bg_color, bar->width,
++			bar->height, bar->textpadding, NULL, 0);
+ 	
+ 	uint32_t status_width = TEXT_WIDTH(bar->status.text, bar->width - x, bar->textpadding);
+ 	draw_text(bar->status.text, bar->width - status_width, y, foreground,
+@@ -526,6 +561,10 @@ cleanup(void)
+ {
+ 	if (socketpath)
+ 		unlink(socketpath);
++	for (uint32_t i = 0; i < tags_l; i++) {
++        if (tag_labels[i])
++            free(tag_labels[i]);
++	}
+ }
+ 
+ static void
+diff --git a/screenshot1.png b/screenshot1.png
+deleted file mode 100644
+index 025634c..0000000
+Binary files a/screenshot1.png and /dev/null differ
+diff --git a/screenshot2.png b/screenshot2.png
+deleted file mode 100644
+index e3805d2..0000000
+Binary files a/screenshot2.png and /dev/null differ
