@@ -465,35 +465,14 @@ draw_frame(Bar *bar)
 		      &inactive_fg_color, &inactive_bg_color, bar->width,
 		      bar->height, bar->textpadding, NULL, 0);
 	
+	/* Draw status text aligned to the right */
 	uint32_t status_width = TEXT_WIDTH(bar->status.text, bar->width - x, bar->textpadding);
 	draw_text(bar->status.text, bar->width - status_width, y, foreground,
 		  background, &inactive_fg_color, &inactive_bg_color,
 		  bar->width, bar->height, bar->textpadding,
 		  bar->status.colors, bar->status.colors_l);
 
-	uint32_t nx;
-	if (center_title) {
-		uint32_t title_width = TEXT_WIDTH(custom_title ? bar->title.text : bar->window_title, bar->width - status_width - x, 0);
-		nx = MAX(x, MIN((bar->width - title_width) / 2, bar->width - status_width - title_width));
-	} else {
-		nx = MIN(x + bar->textpadding, bar->width - status_width);
-	}
-	pixman_image_fill_boxes(PIXMAN_OP_SRC, background,
-				bar->sel ? &middle_bg_color_selected : &middle_bg_color, 1,
-				&(pixman_box32_t){
-					.x1 = x, .x2 = nx,
-					.y1 = 0, .y2 = bar->height
-				});
-	x = nx;
-	
-	x = draw_text(custom_title ? bar->title.text : bar->window_title,
-		      x, y, foreground, background,
-		      (bar->sel && active_color_title) ? &active_fg_color : &inactive_fg_color,
-		      (bar->sel && active_color_title) ? &active_bg_color : &inactive_bg_color,
-		      bar->width - status_width, bar->height, 0,
-		      custom_title ? bar->title.colors : NULL,
-		      custom_title ? bar->title.colors_l : 0);
-
+	/* Fill the middle space with background color */
 	pixman_image_fill_boxes(PIXMAN_OP_SRC, background,
 				bar->sel ? &middle_bg_color_selected : &middle_bg_color, 1,
 				&(pixman_box32_t){
